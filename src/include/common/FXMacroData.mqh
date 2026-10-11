@@ -3,7 +3,7 @@
 
 class FXMacroData {
  private:
-  string api_key;
+  bool credential_supplied;
   string base_url;
 
   string Lower(string value) {
@@ -37,10 +37,10 @@ class FXMacroData {
   string BuildUrl(string path) { return base_url + path; }
 
  public:
-  // The API key is sent only as the X-API-Key request header (see Headers() and
-  // Get()), so it never appears in URLs, logs or proxies.
+  // This WebRequest transport supports public requests only. A nonempty key
+  // is remembered as a flag, never retained or sent in request headers.
   FXMacroData(string key = "", string url = "https://api.fxmacrodata.com/v1") {
-    api_key = key;
+    credential_supplied = key != "";
     base_url = url;
     // Trim trailing separators so joining with a path yields exactly one "/".
     while (StringLen(base_url) > 0 && StringSubstr(base_url, StringLen(base_url) - 1, 1) == "/") {
@@ -48,18 +48,19 @@ class FXMacroData {
     }
   }
 
-  // Request headers for WebRequest(), carrying the API key as X-API-Key.
-  string Headers() { return api_key != "" ? "X-API-Key: " + api_key + "\r\n" : ""; }
+  // Kept for callers that build requests explicitly; no credentials are emitted.
+  string Headers() { return ""; }
 
   // Performs a GET request for a URL built by this class and returns the HTTP
   // status code (or -1 on failure). The API host must be allowed in the
-  // terminal's WebRequest settings. When a key is set, the request is refused
-  // unless the URL uses https://, so the key is never sent in cleartext.
+  // terminal's WebRequest settings. A nonempty constructor key is refused
+  // before dispatch: WebRequest follows redirects without a caller-controlled
+  // redirect policy, so it cannot safely carry credentials.
   int Get(string request_url, string &response, int timeout = 5000) {
     char data[];
     char result[];
     string result_headers;
-    if (api_key != "" && StringSubstr(Lower(request_url), 0, 8) != "https://") {
+    if (credential_supplied) {
       response = "";
       return -1;
     }
